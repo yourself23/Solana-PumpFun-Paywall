@@ -1,0 +1,2 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+export default function handler(_req: VercelRequest, res: VercelResponse) { res.status(200).json({ openapi: "3.1.0", info: { title: "Solana-PumpFun-Paywall", version: "1.0.0" }, servers: [{ url: "https://vercel.app" }], paths: { "/api/pump/curve": { get: {} }, "/api/pump/rug-check": { get: {} }, "/api/pump/quote": { get: {} }, "/api/pump/koth-scan": { get: {} }, "/api/credits/mint": { post: {} }, "/api/mcp": { post: {} }, "/api/sales": { get: {} } } }); }
