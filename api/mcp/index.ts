@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { MICRO_LAMPORTS, PASS_CREDITS, PASS_LAMPORTS, TREASURY, requireGate } from "../../lib/paywall.js";
-import { computeQuote, fetchBondingCurve, runRugCheck, scanActiveCurves } from "../../lib/pump.js";
+import { MICRO_LAMPORTS, PASS_CREDITS, PASS_LAMPORTS, TREASURY, requireGate } from "../../lib/paywall";
+import { computeQuote, fetchBondingCurve, runRugCheck, scanActiveCurves } from "../../lib/pump";
 const TOOLS = [
   { name: "pump_bonding_curve", description: "Decode live Pump.fun bonding curve PDA reserves & graduation % (0.005 SOL)", inputSchema: { type: "object", properties: { mint: { type: "string" } }, required: ["mint"] } },
   { name: "pump_rug_check", description: "Audit top-10 holder concentration & same-slot sniper bundles (0.005 SOL)", inputSchema: { type: "object", properties: { mint: { type: "string" } }, required: ["mint"] } },

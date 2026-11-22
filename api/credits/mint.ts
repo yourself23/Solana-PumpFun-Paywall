@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { PASS_CREDITS, PASS_LAMPORTS, TREASURY, generateApiKey, redis, verifySolPayment } from "../../lib/paywall.js";
+import { PASS_CREDITS, PASS_LAMPORTS, TREASURY, generateApiKey, redis, verifySolPayment } from "../../lib/paywall";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const sig = (req.headers["x-payment-signature"] as string) || (req.body?.signature as string) || (req.query.signature as string) || "";
   if (!sig) return res.status(402).json({ error: "Payment Required for 25-Call Sniper Pass", network: "solana-mainnet", treasury: TREASURY, amount_lamports: PASS_LAMPORTS, credits: PASS_CREDITS });

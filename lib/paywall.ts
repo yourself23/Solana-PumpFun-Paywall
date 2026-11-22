@@ -8,7 +8,7 @@ export const MICRO_LAMPORTS = 5_000_000;
 export const PASS_LAMPORTS = 50_000_000;
 export const PASS_CREDITS = 25;
 export const connection = new Connection(RPC_URL, "confirmed");
-export const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL!, token: process.env.UPSTASH_REDIS_REST_TOKEN! });
+export const redis = new Redis({ url: (process.env.UPSTASH_REDIS_REST_URL || "https://upstash.io").trim(), token: (process.env.UPSTASH_REDIS_REST_TOKEN || "missing").trim() });
 async function sendAlert(signature: string, lamports: number, route: string) {
   const key = process.env.RESEND_API_KEY;
   if (!key) return;

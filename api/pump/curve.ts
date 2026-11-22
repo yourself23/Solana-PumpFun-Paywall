@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { MICRO_LAMPORTS, requireGate } from "../../lib/paywall.js";
-import { fetchBondingCurve } from "../../lib/pump.js";
+import { MICRO_LAMPORTS, requireGate } from "../../lib/paywall";
+import { fetchBondingCurve } from "../../lib/pump";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!(await requireGate(req, res, MICRO_LAMPORTS, "/api/pump/curve"))) return;
   const mint = String(req.query.mint || req.body?.mint || "").trim();
