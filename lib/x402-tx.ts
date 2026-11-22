@@ -9,7 +9,7 @@ export async function resolvePaymentSig(rawHeader: string): Promise<string> {
     if (sig && sig.length >= 64) return sig;
     const rawTx = obj?.payload?.transaction || obj?.transaction;
     if (rawTx && rawTx.length > 80) {
-      return await solRpc("sendTransaction", [rawTx, { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed" }]);
+      return await solRpc("sendTransaction", [rawTx, { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed" }]);
     }
   } catch {}
   return "";
