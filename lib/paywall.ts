@@ -1,23 +1,41 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Connection } from "@solana/web3.js";
-import { Redis } from "@upstash/redis";
 import crypto from "node:crypto";
-export const TREASURY = process.env.TREASURY_WALLET || "2Z6xwB633pMFj3iMj1pUz2ikGrVGGTun7AY3qZDNZip2";
-export const RPC_URL = process.env.SOLANA_RPC_URL || "https://solana.com";
+
+export const TREASURY = (process.env.TREASURY_WALLET || "2Z6xwB633pMFj3iMj1pUz2ikGrVGGTun7AY3qZDNZip2").trim();
+export const RPC_URL = (process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com").trim();
 export const MICRO_LAMPORTS = 5_000_000;
 export const PASS_LAMPORTS = 50_000_000;
 export const PASS_CREDITS = 25;
 export const connection = new Connection(RPC_URL, "confirmed");
-export const redis = new Redis({ url: (process.env.UPSTASH_REDIS_REST_URL || "https://upstash.io").trim(), token: (process.env.UPSTASH_REDIS_REST_TOKEN || "missing").trim() });
-async function sendAlert(signature: string, lamports: number, route: string) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return;
-  fetch("https://resend.com", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": `pf-pay-${signature}` },
-    body: JSON.stringify({ from: "Solana PumpFun Paywall <onboarding@resend.dev>", to: [process.env.ALERT_EMAIL || "timothyhuff25@gmail.com"], subject: `Settled ${(lamports / 1e9).toFixed(4)} SOL on ${route}`, text: `Sig: ${signature}\nLamports: ${lamports}\nTreasury: ${TREASURY}\nRoute: ${route}` })
-  }).catch(() => {});
+
+async function upstash(cmd: (string | number)[]) {
+  const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
+  const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+  const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
+  const json = await res.json() as { result?: unknown; error?: string };
+  if (json.error) throw new Error(json.error);
+  return json.result;
 }
+
+export const redis = {
+  get: async <T = string>(k: string) => (await upstash(["GET", k])) as T | null,
+  set: async (k: string, v: string | number, opts?: { nx?: boolean; ex?: number }) => (await upstash(["SET", k, v, ...(opts?.ex ? ["EX", opts.ex] : []), ...(opts?.nx ? ["NX"] : [])])) === "OK",
+  del: async (k: string) => upstash(["DEL", k]),
+  incr: async (k: string) => Number(await upstash(["INCR", k])),
+  decr: async (k: string) => Number(await upstash(["DECR", k])),
+  incrby: async (k: string, n: number) => Number(await upstash(["INCRBY", k, n])),
+  lpush: async (k: string, v: string) => upstash(["LPUSH", k, v]),
+  ltrim: async (k: string, s: number, e: number) => upstash(["LTRIM", k, s, e]),
+  lrange: async <T = string>(k: string, s: number, e: number) => ((await upstash(["LRANGE", k, s, e])) || []) as T[]
+};
+
+async function sendAlert(signature: string, lamports: number, route: string) {
+  const key = (process.env.RESEND_API_KEY || "").trim();
+  if (!key) return;
+  fetch("https://resend.com", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": `pf-pay-${signature}` }, body: JSON.stringify({ from: "Solana PumpFun Paywall <onboarding@resend.dev>", to: [(process.env.ALERT_EMAIL || "timothyhuff25@gmail.com").trim()], subject: `Settled ${(lamports / 1e9).toFixed(4)} SOL on ${route}`, text: `Sig: ${signature}\nLamports: ${lamports}\nTreasury: ${TREASURY}\nRoute: ${route}` }) }).catch(() => {});
+}
+
 export async function verifySolPayment(signature: string, minLamports: number, route: string) {
   if (!signature || signature.length < 64) return { ok: false, error: "Invalid Solana signature" };
   const replayKey = `pf:tx:${signature}`;
@@ -37,6 +55,7 @@ export async function verifySolPayment(signature: string, minLamports: number, r
     return { ok: true, lamports: received };
   } catch (err) { await redis.del(replayKey); return { ok: false, error: String(err) }; }
 }
+
 export async function requireGate(req: VercelRequest, res: VercelResponse, minLamports: number, route: string): Promise<boolean> {
   const auth = req.headers.authorization || "";
   if (auth.startsWith("Bearer pf_live_")) {
@@ -56,4 +75,5 @@ export async function requireGate(req: VercelRequest, res: VercelResponse, minLa
   if (!check.ok) { res.status(402).json({ error: check.error, treasury: TREASURY, amount_lamports: minLamports }); return false; }
   return true;
 }
+
 export const generateApiKey = () => `pf_live_${crypto.randomBytes(20).toString("hex")}`;
