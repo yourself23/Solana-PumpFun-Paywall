@@ -12,9 +12,12 @@ export const connection = new Connection(RPC_URL, "confirmed");
 async function upstash(cmd: (string | number)[]) {
   const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
   const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+  if (!url || !token) throw new Error("Upstash Redis REST URL and token must be configured");
   const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
+  if (!res.ok) throw new Error(`Upstash Redis request failed with HTTP ${res.status}`);
   const json = await res.json() as { result?: unknown; error?: string };
   if (json.error) throw new Error(json.error);
+  if (!("result" in json)) throw new Error("Upstash Redis response is missing a result");
   return json.result;
 }
 

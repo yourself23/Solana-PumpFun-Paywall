@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { connection } from "./paywall.js";
+import { connection } from "./paywall";
 export const PUMP_PROGRAM_ID = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
 const INIT_REAL_TOKENS = 793_100_000_000_000n;
 export async function fetchBondingCurve(mintStr: string) {

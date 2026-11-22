@@ -12,4 +12,5 @@ jobs:
           node-version: "20"
       - run: npm ci
       - run: npx tsc --noEmit
-      - run: npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+      - run: npm test
+      - run: npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --scope=willstone-nexus-systems --project=solana-pumpfun-paywall
