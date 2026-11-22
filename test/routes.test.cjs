@@ -13,12 +13,15 @@ const routes = {
   mcp: require("../dist/api/mcp").default,
   curve: require("../dist/api/pump/curve").default,
   rugCheck: require("../dist/api/pump/rug-check").default,
+  quote: require("../dist/api/pump/quote").default,
+  scan: require("../dist/api/pump/koth-scan").default,
   mint: require("../dist/api/credits/mint").default,
 };
 
 function response() {
   return {
-    setHeader() {},
+    headers: {},
+    setHeader(name, value) { this.headers[name] = value; },
     status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; },
     send(body) { this.body = body; return this; },
@@ -37,11 +40,33 @@ test("compiled routes return expected statuses without payment", async () => {
     for (const [name, handler] of Object.entries(routes)) {
       const res = response();
       await handler({ method: name === "mint" ? "POST" : "GET", headers: {}, query: {} }, res);
-      assert.equal(res.statusCode, ["curve", "rugCheck", "mint"].includes(name) ? 402 : 200, name);
+      const gated = ["curve", "rugCheck", "quote", "scan", "mint"].includes(name);
+      assert.equal(res.statusCode, gated ? 402 : 200, name);
+      if (gated) {
+        assert.equal(res.body.x402Version, 2, name);
+        assert.deepEqual(JSON.parse(Buffer.from(res.headers["PAYMENT-REQUIRED"], "base64")), res.body);
+        assert.equal(res.body.accepts.length, 2);
+        assert.equal(res.body.amount_lamports, name === "mint" ? 50_000_000 : 5_000_000);
+        assert.equal(res.body.amount_usdc_atomic, name === "mint" ? 5_000_000 : 500_000);
+      }
     }
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test("MCP initialization and tool discovery work without payment", async () => {
+  for (const method of ["initialize", "tools/list"]) {
+    const res = response();
+    await routes.mcp({ method: "POST", headers: {}, query: {}, body: { jsonrpc: "2.0", id: 1, method } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.id, 1);
+    assert.ok(res.body.result);
+  }
+  const res = response();
+  await routes.mcp({ method: "POST", headers: {}, query: {}, body: { method: "tools/call", params: { name: "pump_bonding_curve" } } }, res);
+  assert.equal(res.statusCode, 402);
+  assert.equal(res.body.x402Version, 2);
 });
 
 test("Redis HTTP errors and malformed responses are not treated as empty data", async () => {

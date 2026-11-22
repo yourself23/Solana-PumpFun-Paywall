@@ -31,12 +31,9 @@ function isOnCurve(bytes: Buffer): boolean {
   if (y >= P) return false;
   const y2 = (y * y) % P, u = (y2 - 1n + P) % P, v = (D * y2 + 1n) % P;
   const modPow = (b: bigint, e: bigint) => { let r = 1n; b %= P; while (e > 0n) { if (e & 1n) r = (r * b) % P; b = (b * b) % P; e >>= 1n; } return r; };
-  const x = (u * modPow(v, (P - 5n) / 8n)) % P;
-  const check = (v * x * x) % P;
-  if (check === u || check === (P - u) % P) return true;
-  const x2 = (x * modPow(2n, (P - 1n) / 4n)) % P;
-  const check2 = (v * x2 * x2) % P;
-  return check2 === u || check2 === (P - u) % P;
+  if (v === 0n) return false;
+  const ratio = (u * v) % P;
+  return ratio === 0n || modPow(ratio, (P - 1n) / 2n) === 1n;
 }
 
 function deriveCurvePda(mintStr: string): string {
@@ -70,7 +67,7 @@ export async function runRugCheck(mintStr: string) {
   const holders = (largest?.value || []).map((a: any) => ({ address: a.address, amount: a.amount, pct: Number((BigInt(a.amount) * 10000n) / 1_000_000_000_000_000n) / 100 }));
   const ext = holders.slice(1);
   const top10ExternalPct = Number(ext.slice(0, 10).reduce((s: number, h: any) => s + h.pct, 0).toFixed(2));
-  const largestExternalPct = ext?.pct || 0;
+  const largestExternalPct = ext[0]?.pct || 0;
   const slots = new Map<number, number>();
   for (const s of sigs || []) slots.set(s.slot, (slots.get(s.slot) || 0) + 1);
   const maxSameSlotTxs = Math.max(0, ...slots.values());
@@ -80,6 +77,8 @@ export async function runRugCheck(mintStr: string) {
 }
 
 export async function computeQuote(mintStr: string, side: "buy" | "sell", amountRaw: bigint) {
+  if (amountRaw <= 0n) throw new Error("Amount must be positive");
+  if (side !== "buy" && side !== "sell") throw new Error("Side must be buy or sell");
   const curve = await fetchBondingCurve(mintStr);
   if (curve.complete) throw new Error("Curve already graduated");
   const vSol = BigInt(curve.virtualSolReserves), vTok = BigInt(curve.virtualTokenReserves), k = vSol * vTok;
@@ -100,7 +99,7 @@ export async function scanActiveCurves() {
     for (const b of tx?.meta?.postTokenBalances || []) {
       if (b.mint?.endsWith("pump") && !seen.has(b.mint)) {
         seen.add(b.mint);
-        try { const c = await fetchBondingCurve(b.mint); if (!c.complete) curves.push(c); } catch {}
+        try { const c = await fetchBondingCurve(b.mint); if (!c.complete) curves.push(c); } catch (error) { console.error(`Failed to load curve for ${b.mint}:`, error); }
       }
       if (curves.length >= 5) break;
     }
