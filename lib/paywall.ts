@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { Connection } from "@solana/web3.js";
 import crypto from "node:crypto";
 
 export const TREASURY = (process.env.TREASURY_WALLET || "2Z6xwB633pMFj3iMj1pUz2ikGrVGGTun7AY3qZDNZip2").trim();
@@ -7,18 +6,21 @@ export const RPC_URL = (process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.
 export const MICRO_LAMPORTS = 5_000_000;
 export const PASS_LAMPORTS = 50_000_000;
 export const PASS_CREDITS = 25;
-export const connection = new Connection(RPC_URL, "confirmed");
+
+export async function solRpc(method: string, params: unknown[]) {
+  const res = await fetch(RPC_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const j = await res.json() as { result?: any; error?: any };
+  if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+  return j.result;
+}
 
 async function upstash(cmd: (string | number)[]) {
   const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
   const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
-  if (!url || !token) throw new Error("Upstash Redis REST URL and token must be configured");
   const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
-  if (!res.ok) throw new Error(`Upstash Redis request failed with HTTP ${res.status}`);
-  const json = await res.json() as { result?: unknown; error?: string };
-  if (json.error) throw new Error(json.error);
-  if (!("result" in json)) throw new Error("Upstash Redis response is missing a result");
-  return json.result;
+  const j = await res.json() as { result?: unknown; error?: string };
+  if (j.error) throw new Error(j.error);
+  return j.result;
 }
 
 export const redis = {
@@ -44,9 +46,10 @@ export async function verifySolPayment(signature: string, minLamports: number, r
   const replayKey = `pf:tx:${signature}`;
   if (!(await redis.set(replayKey, route, { nx: true, ex: 2592000 }))) return { ok: false, error: "Signature already redeemed" };
   try {
-    const tx = await connection.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+    const tx = await solRpc("getTransaction", [signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
     if (!tx || tx.meta?.err) { await redis.del(replayKey); return { ok: false, error: "Tx not found or failed on Mainnet" }; }
-    const idx = tx.transaction.message.accountKeys.map((k) => k.pubkey.toBase58()).indexOf(TREASURY);
+    const keys: string[] = (tx.transaction?.message?.accountKeys || []).map((k: any) => typeof k === "string" ? k : k.pubkey);
+    const idx = keys.indexOf(TREASURY);
     if (idx === -1 || !tx.meta) { await redis.del(replayKey); return { ok: false, error: "Treasury not credited" }; }
     const received = tx.meta.postBalances[idx] - tx.meta.preBalances[idx];
     if (received < minLamports) { await redis.del(replayKey); return { ok: false, error: `Received ${received}, need ${minLamports}` }; }
