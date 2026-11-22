@@ -1,3 +1,4 @@
+import { resolvePaymentSig } from "./x402-tx";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "node:crypto";
 
@@ -72,7 +73,7 @@ export async function requireGate(req: VercelRequest, res: VercelResponse, minLa
     res.status(402).json({ error: "Sniper pass depleted or invalid", treasury: TREASURY, pass_lamports: PASS_LAMPORTS, credits: PASS_CREDITS });
     return false;
   }
-  const sig = extractSig(req);
+  const rawP = (req.headers["x-payment-signature"] as string) || (req.headers["x-payment"] as string) || (req.query.signature as string) || (req.body?.signature as string) || ""; const sig = await resolvePaymentSig(rawP);
   if (!sig) {
     send402(res, minLamports, route);
     return false;
