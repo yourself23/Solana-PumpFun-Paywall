@@ -2,7 +2,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "node:crypto";
 import { resolvePaymentSig } from "./x402-tx";
 
-export const TREASURY = process.env.TREASURY_WALLET?.trim() || "5Y7aEmYpCyMJanR9qjCUYf59voi6EsJrkjsJB2cNMsW";
+export const USDC_TREASURY = process.env.USDC_TREASURY_WALLET?.trim() || "5Y7aEmYpCyMJanR9qjCUYf59voi6EsJrkjsJB2cNMsW";
+export const SOL_TREASURY = process.env.SOL_TREASURY_WALLET?.trim() || "2Z6xwB633pMFj3iMj1pUz2ikGrVGGTun7AY3qZDNZip2";
+export const TREASURY = USDC_TREASURY;
 export const RPC_URL = process.env.SOLANA_RPC_URL?.trim() || "https://api.mainnet-beta.solana.com";
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const MICRO_LAMPORTS = 5_000_000;
@@ -118,7 +120,7 @@ export async function verifySolPayment(signature: string, minLamports: number, r
   if (!tx) return { ok: false, error: "Transaction not yet confirmed; retry using its signature", pending: true };
   if (!tx.meta || tx.meta.err !== null) return { ok: false, error: "Transaction failed or has invalid metadata" };
   const keys = tx.transaction?.message?.accountKeys?.map((key) => typeof key === "string" ? key : key.pubkey) || [];
-  const idx = keys.indexOf(TREASURY);
+  const idx = keys.indexOf(SOL_TREASURY);
   const before = idx < 0 ? 0 : tx.meta.preBalances?.[idx];
   const after = idx < 0 ? 0 : tx.meta.postBalances?.[idx];
   if (idx >= 0 && (!Number.isSafeInteger(before) || !Number.isSafeInteger(after))) throw new Error("Invalid treasury SOL balance");
@@ -147,8 +149,8 @@ export async function requestPaymentSignature(req: VercelRequest): Promise<strin
 
 export function send402(res: VercelResponse, minLamports: number, route: string, msg = "Payment Required (x402 Native SOL or USDC)", pendingSignature?: string) {
   const minUsdc = usdcPrice(minLamports);
-  const accept = (asset: string, amount: string) => ({ scheme: "exact", network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", asset, amount, maxAmountRequired: amount, payTo: TREASURY, maxTimeoutSeconds: 60, extra: {} });
-  const challenge = { x402Version: 2, error: msg, resource: { url: route, mimeType: "application/json" }, accepts: [accept("So11111111111111111111111111111111111111112", String(minLamports)), accept(USDC_MINT, String(minUsdc))], treasury: TREASURY, amount_lamports: minLamports, amount_usdc_atomic: minUsdc, ...(pendingSignature ? { payment_signature: pendingSignature } : {}) };
+  const accept = (asset: string, amount: string, payTo: string) => ({ scheme: "exact", network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", asset, amount, maxAmountRequired: amount, payTo, maxTimeoutSeconds: 60, extra: {} });
+  const challenge = { x402Version: 2, error: msg, resource: { url: route, mimeType: "application/json" }, accepts: [accept("So11111111111111111111111111111111111111112", String(minLamports), SOL_TREASURY), accept(USDC_MINT, String(minUsdc), USDC_TREASURY)], treasury: TREASURY, amount_lamports: minLamports, amount_usdc_atomic: minUsdc, ...(pendingSignature ? { payment_signature: pendingSignature } : {}) };
   res.setHeader("PAYMENT-REQUIRED", Buffer.from(JSON.stringify(challenge)).toString("base64"));
   return res.status(402).json(challenge);
 }
